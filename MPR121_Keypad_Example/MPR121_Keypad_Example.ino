@@ -59,7 +59,7 @@ void setup()
   DDRC |= 0b00010011;
   PORTC = 0b00110000;  // Pull-ups on I2C Bus
   i2cInit();
-  lcd.begin(16, 2);
+  lcd.begin(20, 4);
   delay(100);
   mpr121QuickConfig();
 }

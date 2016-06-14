@@ -40,16 +40,18 @@ void setup() {
   DDRC |= 0b00010011;
   PORTC = 0b00110000;  // Pull-ups on I2C Bus
   i2cInit();
-  lcd.begin(16, 2);
+  lcd.begin(20, 4);
   delay(100);
   mpr121QuickConfig();
   lcd.print("Welcome to QA!");
-  delay(3000);
+  delay(1000);
+  lcd.clear();
 }
 
 void loop() {
+  Serial.println(NUMQ);
   int num_correct = QArepl();
-  lcd.print(endGame(num_correct));
+  endGame(num_correct);
   exit(0);
 }
 
@@ -60,23 +62,30 @@ void loop() {
 */
 int QArepl() {
   int correct = 0;
-  for (int i=0; i <= NUMQ; i++) {
-    askQ(q_array[i]);
-    if (getResponse() == a_array[i]){
+  for (int i=0; i < NUMQ; i++) {
+    if (getResponse(askQ(q_array[i])) == a_array[i]){
       correct++;
     }
   }
+  Serial.println(correct);
   return correct;
 }
 
-void askQ(String question){
- lcd.print(question+":");
+int askQ(String question){
+ printQuestion(question+":");
+ if(question.length() < 20)
+   return 1;
+ else if(question.length() < 40)
+   return 2;
+ else
+   return 3;//Question will be cut down to three lines if longer
 }
 
-String getResponse() {
+String getResponse(int qRows) {
   String response = "";
   boolean entered = false;
   int touchNumber;
+  lcd.setCursor(0,qRows);
   while(!entered)
   {
     while(checkInterrupt());
@@ -95,8 +104,21 @@ String getResponse() {
     {
       if (touchstatus & (1<<DELETE)){
         int len = response.length();
-        if (len > 0)
-          response[len-1] = '\0';
+        if (len > 0 && len <= 20){
+          response.remove(len-1);
+          lcd.setCursor(len-1,qRows);
+          lcd.print(' ');
+        }
+        else if (len > 0 && len <= 40){
+          response.remove(len-1);
+          lcd.setCursor(len-21,qRows+1);
+          lcd.print(' ');
+        }
+        else if (len > 0 && len <= 60){
+          response.remove(len-1);
+          lcd.setCursor(len-41,qRows+2);
+          lcd.print(' ');
+        }
       }
       else if (touchstatus & (1<<SEVEN))
         response.concat('7');
@@ -121,24 +143,112 @@ String getResponse() {
       else if (touchstatus & (1<<THREE))
         response.concat('3');
 
-      lcd.setCursor(0,1);
-      lcd.print(response);
-      lcd.print("________________");
+    response = printResponse(response, qRows);
     }
   }
+  lcd.clear();
   return response;
 }
 
+String printResponse(String response, int qRows){
+  int rowLimit = 4 - qRows;
+  int len = response.length();
+     if((len <= 20) && (rowLimit > 0)){
+        lcd.setCursor(0,qRows);
+        lcd.print(response);
+        return response;
+     }
+     else if((len <= 40) && (rowLimit > 1)){
+        lcd.setCursor(0,qRows);
+        for(int i=0; i<20; i++)
+          lcd.print(response[i]);
+        lcd.setCursor(0, qRows+1);
+        for(int i=20; i<len; i++)
+          lcd.print(response[i]);
+          return response;
+     }
+     else if((len <= 60) && (rowLimit > 2)){
+        lcd.setCursor(0,qRows);
+        for(int i=0; i<20; i++)
+          lcd.print(response[i]);
+        lcd.setCursor(0, qRows+1);
+        for(int i=20; i<40; i++)
+          lcd.print(response[i]);
+        lcd.setCursor(0, qRows+2);
+        for(int i=40; i<len; i++)
+          lcd.print(response[i]);
+        return response;
+     }
+     else{
+      response.remove(len-(len-(20*rowLimit)));
+      return printResponse(response, qRows);
+     }
+}
+
+
+void printQuestion(String question){
+  int len = question.length();
+     if(len <= 20){
+        lcd.setCursor(0,0);
+        lcd.print(question);
+     }
+     else if(len <= 40){
+        lcd.setCursor(0,0);
+        for(int i=0; i<20; i++)
+          lcd.print(question[i]);
+        lcd.setCursor(0, 1);
+        for(int i=20; i<len; i++)
+          lcd.print(question[i]);
+     }
+     else if(len <= 60){
+        lcd.setCursor(0,0);
+        for(int i=0; i<20; i++)
+          lcd.print(question[i]);
+        lcd.setCursor(0, 1);
+        for(int i=20; i<40; i++)
+          lcd.print(question[i]);
+        lcd.setCursor(0, 2);
+        for(int i=40; i<len; i++)
+          lcd.print(question[i]);
+     }
+     else{
+      lcd.setCursor(0,0);
+        for(int i=0; i<20; i++)
+          lcd.print(question[i]);
+        lcd.setCursor(0, 1);
+        for(int i=20; i<40; i++)
+          lcd.print(question[i]);
+        lcd.setCursor(0, 2);
+        for(int i=40; i<55; i++)
+          lcd.print(question[i]);
+        lcd.print("...?:");
+     }
+}
+
 //endGame function
-String endGame(int correct) {
-if (correct == NUMQ)
-    return ("You won!");
- else{
+void endGame(int correct) {
+  lcd.noBlink();
+  if (correct == NUMQ){
+    Serial.println("WIN");
+    lcd.print("You win!");
+    delay(1000);
+    lcd.setCursor(0,2);
+    lcd.print("The code is 951.");
+  }
+  else{
+    Serial.println("LOSE");
     String response = "You got ";
-    response.concat(correct+48);//lol ASCII
+    response.concat(correct);//lol ASCII
     response.concat(" of ");
-    response.concat(NUMQ+48);
-    return(response);
+    response.concat(NUMQ);
+    response.concat("!");
+    lcd.print(response);
+    lcd.setCursor(0,2);
+    delay(1000);
+    lcd.print("Let's try again...");
+    delay(1000);
+    lcd.clear();
+    endGame(QArepl());
  }
 }
 
