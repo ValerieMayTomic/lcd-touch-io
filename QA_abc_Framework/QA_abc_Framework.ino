@@ -27,13 +27,16 @@ uint16_t touchstatus;
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
-// include the tiemer library code:
-#include "Timer.h"
-// initialize timer
-Timer t;
 
 //include user Q/A information:
 #include "mydata.h"
+
+//global declarations because timers ugh
+//boolean done = false;
+//String response ="";
+//int pressCount = 0;
+//int prevKey = -1;
+//int qRows;
 
 void setup() {
   //interupt pin init
@@ -49,12 +52,12 @@ void setup() {
   delay(100);
   mpr121QuickConfig();
   lcd.print("Welcome to QA!");
+  //lcd.blink();
   delay(1000);
   lcd.clear();
 }
 
 void loop() {
-  Serial.println(NUMQ);
   int num_correct = QArepl();
   endGame(num_correct);
   exit(0);
@@ -90,10 +93,13 @@ String getResponse(int qRows) {
   String response = "";
   boolean entered = false;
   int touchNumber;
+  int newKey = -1;
   lcd.setCursor(0,qRows);
   while(!entered)
   {
-    while(checkInterrupt());
+    while(checkInterrupt() && (newKey == -1));
+    Serial.println("newkey = ");
+    Serial.println(newKey);
     touchNumber = 0;
     
     touchstatus = mpr121Read(0x01) << 8;
@@ -107,87 +113,239 @@ String getResponse(int qRows) {
     
     if (touchNumber == 1)
     {
-       if (touchstatus & (1<<DELETE)){
+       if ((touchstatus & (1<<DELETE)) || (newKey == DELETE)){
         deleteLast(response, qRows);
-      else if (touchstatus & (1<<PQRS))
-        response.concat('7');
-      else if (touchstatus & (1<<GHI))
-        response.concat('4');
-      else if (touchstatus & (1<<CHECK))
-        response.concat('1');
-      else if (touchstatus & (1<<SPACE))
-        response.concat('0');
-      else if (touchstatus & (1<<TUV))
-        response.concat('8');
-      else if (touchstatus & (1<<JKL))
-        response.concat('5');
-      else if (touchstatus & (1<<ABC))
-        response.concat('2');
-      else if (touchstatus & (1<<ENTER))
+        newKey = -1;
+       }
+      else if ((touchstatus & (1<<PQRS)) || (newKey == PQRS))
+        newKey = keyPressed(response,PQRS,1,qRows);
+      else if ((touchstatus & (1<<GHI))|| (newKey == GHI))
+        newKey = keyPressed(response,GHI,1,qRows);
+      //else if (touchstatus & (1<<CHECK))
+        //response = keyPressed(response,CHECK,1,qRows);
+      else if ((touchstatus & (1<<SPACE))|| (newKey == SPACE)){
+        response.concat(' ');
+        newKey = -1;
+      }
+      else if ((touchstatus & (1<<TUV)) || (newKey == TUV))
+        newKey = keyPressed(response,TUV,1,qRows);
+      else if ((touchstatus & (1<<JKL)) || (newKey == JKL))
+        newKey = keyPressed(response,JKL,1,qRows);
+      else if ((touchstatus & (1<<ABC)) || (newKey == ABC))
+        newKey = keyPressed(response,ABC,1,qRows);
+      else if ((touchstatus & (1<<ENTER)) || (newKey == ENTER)){
         entered = true;
-      else if (touchstatus & (1<<WXYZ))
-        response.concat('9');
-      else if (touchstatus & (1<<MNO))
-        response.concat('6');
-      else if (touchstatus & (1<<DEF))
-        response.concat('3');
-    response = printResponse(keyPressed(response,1,-1), qRows); 
+        newKey = -1;
+      }
+      else if ((touchstatus & (1<<WXYZ)) || (newKey == WXYZ))
+         newKey = keyPressed(response,WXYZ,1,qRows);
+      else if ((touchstatus & (1<<MNO)) || (newKey == MNO))
+        newKey = keyPressed(response,MNO,1,qRows);
+      else if ((touchstatus & (1<<DEF)) || (newKey == DEF))
+        newKey = keyPressed(response,DEF,1,qRows);
     }
+    else{
+      newKey = -1;
+    }
+    response = printResponse(response, qRows);
   }
   lcd.clear();
   return response;
 }
 
-String keyPressed(String response, int pressCount, int prevKey){
-  int cur_timer;
-  int cur_key;
-  if (touchstatus & (1<<DELETE))
+int keyPressed(String &response, int prevKey, int pressCount, int qRows){
+  confirm(response, prevKey, pressCount);
+  printResponse(response, qRows);
+  unsigned long cur_time = millis(); 
+  int cur_key = -1;
+  boolean touchDetected = false;
+  while(!touchDetected){
+    
+    while(checkInterrupt() && ((millis() - cur_time) < 1200));
+    
+    touchstatus = mpr121Read(0x01) << 8;
+    touchstatus |= mpr121Read(0x00);
+    
+    if ((millis() - cur_time) > 1200){
+      Serial.println("TIMEOUT");
+      return -1;
+    }
+    
+    Serial.println("PRESS DETECTED");
+    int touchNumber = 0; 
+    touchstatus = mpr121Read(0x01) << 8;
+    touchstatus |= mpr121Read(0x00);
+      
+    for (int j=0; j<12; j++){
+      if ((touchstatus & (1<<j)))
+      touchNumber++;
+    }
+      
+    if (touchNumber == 1){
+      touchDetected = true;
+      if (touchstatus & (1<<DELETE))
+       cur_key = DELETE;
+      else if (touchstatus & (1<<PQRS))
+        cur_key = PQRS;
+      if (touchstatus & (1<<GHI))
+       cur_key = GHI;
+      //else if (touchstatus & (1<<CHECK))
+        //do nothing
+      else if (touchstatus & (1<<SPACE))
+        cur_key = SPACE;
+      else if (touchstatus & (1<<TUV))
+        cur_key = TUV;
+      else if (touchstatus & (1<<JKL))
+        cur_key = JKL;  
+      else if (touchstatus & (1<<ABC))
+        cur_key = ABC;
+      else if (touchstatus & (1<<ENTER))
+        cur_key = ENTER;
+      else if (touchstatus & (1<<WXYZ))
+        cur_key = WXYZ;
+      else if (touchstatus & (1<<MNO))
+        cur_key = MNO;
+      else if (touchstatus & (1<<DEF))
+        cur_key = DEF; 
+    }
+  }
+  if(cur_key == prevKey){
+    Serial.println("MULTIPRESS");
     deleteLast(response, qRows);
-  else if (touchstatus & (1<<PQRS)){
-    cur_timer = t.after(2000, confirm(PQRS, pressCount%4)
-    cur_key = PQRS;
+    keyPressed(response, cur_key, pressCount+1, qRows);
   }
-  else if (touchstatus & (1<<GHI))
-    cur_timer = t.after(2000, confirm(GHI, pressCount%3)
-    cur_key = GHI;
-  else if (touchstatus & (1<<CHECK))
-    //response.concat('1');
-  else if (touchstatus & (1<<SPACE))
-    response.concat(' ');
-  else if (touchstatus & (1<<TUV))
-    response.concat('8');
-  else if (touchstatus & (1<<JKL))
-    response.concat('5');
-  else if (touchstatus & (1<<ABC))
-    response.concat('2');
-  else if (touchstatus & (1<<ENTER))
-    entered = true;
-  else if (touchstatus & (1<<WXYZ))
-    response.concat('9');
-  else if (touchstatus & (1<<MNO))
-    response.concat('6');
-  else if (touchstatus & (1<<DEF))
-    response.concat('3'); 
-
-  while(checkInterrupt());
-  touchNumber = 0; 
-  touchstatus = mpr121Read(0x01) << 8;
-  touchstatus |= mpr121Read(0x00);
-    
-  for (int j=0; j<12; j++){
-    if ((touchstatus & (1<<j)))
-    touchNumber++;
+  else{
+    Serial.println("NEWPRESS");
+    Serial.println("cur_key =");
+    Serial.println(cur_key);
+    //deleteLast(response, qRows);
+    //confirm(response, prevKey, pressCount);
+    return cur_key;
   }
-    
-  if (touchNumber == 1){
-    if(curr_key == prev_key)
-      keyPressed(response, pressCount++, curr_key)
-  }
-  
-  return response
 }
 
-void deleteLast(String response, int qRows){
+void confirm(String &response, int key, int pressCount){
+  Serial.println("CONFIRMING");
+  Serial.println(key);
+  Serial.println("pressCount=");
+  Serial.println(pressCount);
+  if (key == PQRS){
+    switch(pressCount%4){
+      case 1:
+        response.concat('p');
+        break;
+      case 2:
+        response.concat('q');
+        break;
+      case 3:
+        response.concat('r');
+        break;
+      case 0:
+        response.concat('s');
+        break;
+    }
+  }
+  else if (key == GHI){
+    switch(pressCount%3){
+      case 1:
+        response.concat('g');
+        break;
+      case 2:
+        response.concat('h');
+        break;
+      case 0:
+        response.concat('i');
+        break;
+    }
+  }
+  //else if (touchstatus & (1<<CHECK))
+    //
+  else if (key == TUV){
+    switch(pressCount%3){
+      case 1:
+        response.concat('t');
+        break;
+      case 2:
+        response.concat('u');
+        break;
+      case 0:
+        response.concat('v');
+        break;
+    }
+  }
+  else if (key == JKL){
+    switch(pressCount%3){
+      case 1:
+        response.concat('j');
+        break;
+      case 2:
+        response.concat('k');
+        break;
+      case 0:
+        response.concat('l');
+        break;
+    }
+  }
+  else if (key == ABC){
+    switch(pressCount%3){
+      case 1:
+        response.concat('a');
+        break;
+      case 2:
+        response.concat('b');
+        break;
+      case 0:
+        response.concat('c');
+        break;
+    }
+  }
+  else if (key == WXYZ){
+    switch(pressCount%4){
+      case 1:
+        response.concat('w');
+        break;
+      case 2:
+        response.concat('x');
+        break;
+      case 3:
+        response.concat('y');
+        break;
+      case 0:
+        response.concat('z');
+        break;
+    }
+  }
+  else if (key == MNO){
+    switch(pressCount%3){
+      case 1:
+        response.concat('m');
+        break;
+      case 2:
+        response.concat('n');
+        break;
+      case 0:
+        response.concat('o');
+        break;
+    }
+  }
+  else if (key == DEF){
+    switch(pressCount%3){
+      case 1:
+        response.concat('d');
+        break;
+      case 2:
+        response.concat('e');
+        break;
+      case 0:
+        response.concat('f');
+        break;
+    }
+  }
+  
+  Serial.println("CONFIRMED");
+}
+
+void deleteLast(String &response, int qRows){
   int len = response.length();
   if (len > 0 && len <= 20){
     response.remove(len-1);
@@ -416,6 +574,7 @@ void mpr121QuickConfig(void) {
 }
 
 byte checkInterrupt(void){
+  //Serial.println("checking pad");
   if (digitalRead(irqpin)) {
     return 1;
   }

@@ -238,7 +238,7 @@ void endGame(int correct) {
   else{
     Serial.println("LOSE");
     String response = "You got ";
-    response.concat(correct);//lol ASCII
+    response.concat(correct);
     response.concat(" of ");
     response.concat(NUMQ);
     response.concat("!");
