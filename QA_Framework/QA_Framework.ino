@@ -20,6 +20,7 @@
 #define MPR121_R 0xB5  // ADD pin is grounded
 #define MPR121_W 0xB4 // So address is 0x5A
 int irqpin = 7;  // D7
+
 uint16_t touchstatus;
 
 // include the lcd library code:
@@ -49,7 +50,6 @@ void setup() {
 }
 
 void loop() {
-  Serial.println(NUMQ);
   int num_correct = QArepl();
   endGame(num_correct);
   exit(0);
@@ -67,10 +67,13 @@ int QArepl() {
       correct++;
     }
   }
-  Serial.println(correct);
   return correct;
 }
 
+/*
+ * Checks the length of the question being asked, and
+ * returns the number of rows it will take up.
+ */
 int askQ(String question){
  printQuestion(question+":");
  if(question.length() < 20)
@@ -81,6 +84,10 @@ int askQ(String question){
    return 3;//Question will be cut down to three lines if longer
 }
 
+/*
+ * Waits for touchpad input, looping on the same question until
+ * the enter is pressed. Returns the user's response as a string
+ */
 String getResponse(int qRows) {
   String response = "";
   boolean entered = false;
@@ -150,6 +157,13 @@ String getResponse(int qRows) {
   return response;
 }
 
+/*
+ * A function that prints the response string
+ * with proper word wrapping for 20x4 display,
+ * cutting off any letters entered outside the
+ * range of the display and returning the
+ * response string.
+ */
 String printResponse(String response, int qRows){
   int rowLimit = 4 - qRows;
   int len = response.length();
@@ -229,14 +243,13 @@ void printQuestion(String question){
 void endGame(int correct) {
   lcd.noBlink();
   if (correct == NUMQ){
-    Serial.println("WIN");
     lcd.print("You win!");
     delay(1000);
     lcd.setCursor(0,2);
-    lcd.print("The code is 951.");
+    lcd.print("System unlocking...");
+    
   }
   else{
-    Serial.println("LOSE");
     String response = "You got ";
     response.concat(correct);
     response.concat(" of ");
